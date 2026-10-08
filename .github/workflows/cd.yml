@@ -1,0 +1,51 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    runs-on: [self-hosted, windows, x64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bump version
+        shell: powershell
+        run: |
+          (Get-Content README.md) -replace 'AppVersion-0', 'AppVersion-1' | Set-Content README.md
+
+      - name: Commit README
+        shell: powershell
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "Actualizar versión de la aplicación [skip ci]"
+          git push
+
+  validate-prod:
+    needs: bump-version
+    runs-on: [self-hosted, windows, x64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate PROD token
+        shell: powershell
+        env:
+          PROD_TOKEN: ${{ secrets.PROD_TOKEN }}
+        run: |
+          if ($env:PROD_TOKEN -ne $env:LOCAL_PROD_TOKEN) {
+            Write-Error "PROD_TOKEN no coincide con LOCAL_PROD_TOKEN"
+            exit 1
+          }
+
+          Write-Host "PROD_TOKEN coincide con LOCAL_PROD_TOKEN"
