@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [develop]
+    paths-ignore:
+      - README.md
+
+  push:
+    branches: [develop]
+    paths-ignore:
+      - README.md
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-readme:
+    name: Actualizar README
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Registrar la rama en el README
+        env:
+          FEATURE_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          echo "- Añadida feature: $FEATURE_BRANCH" >> README.md
+
+      - name: Configurar Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit y push del README
+        env:
+          TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          git add README.md
+          git commit -m "docs: registrar rama [skip ci]" || exit 0
+          git push origin "HEAD:$TARGET_BRANCH"
+
+  validate-dev:
+    name: Validar entorno de desarrollo
+    needs: update-readme
+    runs-on: [self-hosted, windows, x64]
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Validar entorno de desarrollo
+        shell: pwsh
+        env:
+          TOKEN: ${{ secrets.DEV_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TOKEN)) {
+            Write-Error "El secreto DEV_TOKEN no está configurado"
+            exit 1
+          }
+
+          if ($env:TOKEN -ceq $env:LOCAL_DEV_TOKEN) {
+            Write-Host "CI: validación de desarrollo correcta"
+          } else {
+            Write-Error "CI: validación fallida"
+            exit 1
+          }
+
+   
+
+          

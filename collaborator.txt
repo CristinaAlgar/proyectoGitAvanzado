@@ -1,1 +1,3 @@
 Cristina Albert García
+Nueva feature: mi-feature
+Prueba dos del funcionamiento de CI, quitando las ruleset para que README pueda actualizarse.
