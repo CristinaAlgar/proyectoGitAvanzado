@@ -1,17 +1,14 @@
-
 name: CI
 
 on:
   pull_request:
-    branches:
-      - develop
     types: [opened, synchronize, reopened]
+    branches: [develop]
     paths-ignore:
       - README.md
 
   push:
-    branches:
-      - develop
+    branches: [develop]
     paths-ignore:
       - README.md
 
@@ -19,7 +16,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   update-readme:
@@ -29,45 +25,54 @@ jobs:
     steps:
       - name: Descargar el repositorio
         uses: actions/checkout@v4
-
-      - name: Añadir la feature al README
-        if: github.event_name == 'push'
-        run: |
-          echo "Añadida feature: ${{ github.ref_name }}" >> README.md
-
-      - name: Crear PR con el README actualizado
-        if: github.event_name == 'push'
-        uses: peter-evans/create-pull-request@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: automation/update-readme
-          base: develop
-          title: "Actualizar README desde CI"
-          commit-message: "Actualizar README desde CI"
-          body: "Actualización automática del README generada por el workflow de CI."
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Registrar la rama en el README
+        env:
+          FEATURE_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          echo "- Añadida feature: $FEATURE_BRANCH" >> README.md
+
+      - name: Configurar Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit y push del README
+        env:
+          TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          git add README.md
+          git commit -m "docs: registrar rama [skip ci]" || exit 0
+          git push origin "HEAD:$TARGET_BRANCH"
 
   validate-dev:
-    name: Validar token de desarrollo
+    name: Validar entorno de desarrollo
     needs: update-readme
     runs-on: [self-hosted, windows, x64]
 
-    env:
-      DEV_TOKEN: ${{ secrets.DEV_TOKEN }}
-
     steps:
-      - name: Comprobar DEV_TOKEN
-        shell: powershell
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Validar entorno de desarrollo
+        shell: pwsh
+        env:
+          TOKEN: ${{ secrets.DEV_TOKEN }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:DEV_TOKEN)) {
+          if ([string]::IsNullOrWhiteSpace($env:TOKEN)) {
             Write-Error "El secreto DEV_TOKEN no está configurado"
             exit 1
           }
 
-          if ($env:DEV_TOKEN -cne $env:LOCAL_DEV_TOKEN) {
-            Write-Error "El token de desarrollo no coincide"
+          if ($env:TOKEN -ceq $env:LOCAL_DEV_TOKEN) {
+            Write-Host "CI: validación de desarrollo correcta"
+          } else {
+            Write-Error "CI: validación fallida"
             exit 1
           }
 
-          Write-Host "El token de desarrollo es correcto"
+   
 
           
