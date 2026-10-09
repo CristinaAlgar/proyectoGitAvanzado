@@ -1,0 +1,82 @@
+
+name: CD
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths-ignore:
+      - README.md
+
+  push:
+    branches: [main]
+    paths-ignore:
+      - README.md
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    name: Incrementar versión
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Incrementar versión en el README
+        if: github.event_name == 'push'
+        run: |
+          LAST=$(grep -oP 'AppVersion-\K[0-9]+' README.md | tail -1)
+
+          if [ -z "$LAST" ]; then
+            echo "No se ha encontrado ninguna versión en README.md"
+            exit 1
+          fi
+
+          NEXT=$((LAST + 1))
+          FECHA=$(TZ=Europe/Madrid date '+%d/%m/%Y %H:%M')
+
+          echo "- AppVersion-$NEXT - $FECHA" >> README.md
+
+      - name: Configurar Git
+        if: github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit y push del README
+        if: github.event_name == 'push'
+        run: |
+          git add README.md
+          git commit -m "docs: bump de versión [skip ci]"
+          git push origin HEAD:main
+
+  validate-prod:
+    name: Validar entorno de producción
+    needs: bump-version
+    runs-on: [self-hosted, windows, x64]
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Validar entorno de producción
+        shell: pwsh
+        env:
+          TOKEN: ${{ secrets.PROD_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TOKEN)) {
+            Write-Error "El secreto PROD_TOKEN no está configurado"
+            exit 1
+          }
+
+          if ($env:TOKEN -ceq $env:LOCAL_PROD_TOKEN) {
+            Write-Host "CD: validación de producción correcta"
+          } else {
+            Write-Error "CD: validación fallida"
+            exit 1
+          }
