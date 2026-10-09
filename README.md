@@ -1,2 +1,3 @@
 AppVersion-0
 Añadida feature: mi-feature 2.0
+Actualización 3 de prueba
