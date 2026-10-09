@@ -1,0 +1,73 @@
+
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+    types: [opened, synchronize, reopened]
+    paths-ignore:
+      - README.md
+
+  push:
+    branches:
+      - develop
+    paths-ignore:
+      - README.md
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-readme:
+    name: Actualizar README
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Añadir la feature al README
+        if: github.event_name == 'push'
+        run: |
+          echo "Añadida feature: ${{ github.ref_name }}" >> README.md
+
+      - name: Crear PR con el README actualizado
+        if: github.event_name == 'push'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: automation/update-readme
+          base: develop
+          title: "Actualizar README desde CI"
+          commit-message: "Actualizar README desde CI"
+          body: "Actualización automática del README generada por el workflow de CI."
+
+  validate-dev:
+    name: Validar token de desarrollo
+    needs: update-readme
+    runs-on: [self-hosted, windows, x64]
+
+    env:
+      DEV_TOKEN: ${{ secrets.DEV_TOKEN }}
+
+    steps:
+      - name: Comprobar DEV_TOKEN
+        shell: powershell
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:DEV_TOKEN)) {
+            Write-Error "El secreto DEV_TOKEN no está configurado"
+            exit 1
+          }
+
+          if ($env:DEV_TOKEN -cne $env:LOCAL_DEV_TOKEN) {
+            Write-Error "El token de desarrollo no coincide"
+            exit 1
+          }
+
+          Write-Host "El token de desarrollo es correcto"
+
+          
